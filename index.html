@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>המצרכים שלנו</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#2f7d5b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="מצרכים">
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--ink:#1f2a24;--mut:#6b7770;--acc:#2f7d5b;--accink:#fff;--out:#c8553d;--line:#e4e0d6;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#141916;--card:#1e2622;--ink:#eef2ee;--mut:#9aa8a0;--acc:#4fb88a;--accink:#0e1a14;--out:#e8816b;--line:#2d3832}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;font-size:17px;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+header{padding:14px 16px 6px;font-size:22px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+main{flex:1;overflow-y:auto;padding:8px 16px 16px}
+.add{display:flex;gap:6px;margin-bottom:12px}
+.add input,.add select{min-width:0;padding:12px 8px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font-size:16px}
+.add input{flex:1}
+.add select{max-width:112px}
+button{font:inherit;border-radius:12px;cursor:pointer;color:var(--ink);background:var(--card);border:1px solid var(--line);padding:10px 14px;min-height:44px}
+button.p{background:var(--acc);color:var(--accink);border-color:var(--acc);font-weight:600}
+h4{margin:14px 2px 6px;color:var(--mut);font-size:14px}
+.row{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-bottom:8px}
+.n{flex:1;min-width:0;overflow-wrap:anywhere}
+.done .n{text-decoration:line-through;color:var(--mut)}
+.st{min-width:78px;font-weight:600}
+.st.have{background:var(--acc);color:var(--accink);border-color:var(--acc)}
+.st.out{background:var(--out);color:#fff;border-color:var(--out)}
+.ic{padding:6px 10px;min-width:40px}
+.q{display:flex;align-items:center;gap:4px}
+.q b{min-width:22px;text-align:center}
+input[type=checkbox]{width:26px;height:26px;accent-color:var(--acc)}
+nav{display:flex;border-top:1px solid var(--line);background:var(--card);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;border:0;border-radius:0;min-height:56px;background:none;color:var(--mut);font-weight:600}
+nav button.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
+.empty{text-align:center;color:var(--mut);margin:32px 0}
+.fin{width:100%;margin-top:8px}
+.sm{font-size:12px;padding:2px 8px;min-height:28px;color:var(--mut)}
+#sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end}
+#sheet.show{display:flex}
+#sheet>div{background:var(--bg);width:100%;max-height:85%;overflow-y:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+#toast{position:fixed;bottom:calc(76px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:6px 8px 6px 16px;border-radius:24px;font-size:15px;display:none;z-index:5;align-items:center;gap:10px;white-space:nowrap}
+#toast button{min-height:34px;padding:4px 12px;background:var(--acc);color:var(--accink);border:0}
+#bar{margin:0 16px;font-size:13px;color:var(--mut)}
+</style>
+</head>
+<body>
+<header><span>🛒 המצרכים שלנו</span><button class="ic" id="menu" aria-label="גיבוי והגדרות">⚙︎</button></header>
+<div id="bar"></div>
+<main id="main"></main>
+<nav><button id="t0">בבית</button><button id="t1">קניות <span id="cnt"></span></button></nav>
+<div id="sheet"><div id="sb"></div></div>
+<div id="toast"><span id="tm"></span><button id="tu">בטל</button></div>
+<input type="file" id="file" accept="application/json,.json" style="display:none">
+<script>
+(function(){
+var CATS=['ירקות ופירות','מוצרי חלב','לחם ומאפים','בשר ודגים','מזווה','חומרי ניקוי','אחר'];
+var K='grocery-v2',items={},tab=0,prev=null,sheetMode=null;
+var $=function(i){return document.getElementById(i)};
+function load(){try{var o=JSON.parse(localStorage.getItem(K)||'{}');return o&&typeof o==='object'?o:{}}catch(e){return {}}}
+function persist(){try{localStorage.setItem(K,JSON.stringify(items))}catch(e){toast('השמירה נכשלה, הנפח מלא?')}}
+function toast(m,undo){$('tm').textContent=m;$('tu').style.display=undo?'':'none';$('toast').style.display='flex';clearTimeout(toast.h);toast.h=setTimeout(function(){$('toast').style.display='none'},undo?6000:2200)}
+function snap(){prev=JSON.stringify(items)}
+$('tu').onclick=function(){if(prev){items=JSON.parse(prev);prev=null;persist();render()}$('toast').style.display='none'};
+function norm(s){return s.trim().replace(/\s+/g,' ')}
+function mkid(s){var h=5381,k=norm(s).toLowerCase();for(var i=0;i<k.length;i++)h=((h<<5)+h+k.charCodeAt(i))|0;return 'i'+(h>>>0).toString(36)+k.length}
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function save(id,patch){items[id]=Object.assign({},items[id],patch);persist();render()}
+function addItem(name,cat,toPantry){
+  name=norm(name);if(!name)return;var id=mkid(name),it=items[id];
+  if(it){
+    if(toPantry){if(it.pantry)toast('המוצר כבר קיים');else{save(id,{pantry:true});toast('נוסף לרשימת הבית')}}
+    else{if(it.need)toast('כבר ברשימת הקניות');else{save(id,{need:true,cart:false});toast('נוסף לרשימת הקניות')}}
+    return;
+  }
+  save(id,{name:name,cat:cat,pantry:!!toPantry,need:!toPantry,qty:1,cart:false});
+}
+function sorted(f){return Object.keys(items).filter(function(i){return f(items[i])}).sort(function(a,b){return items[a].name.localeCompare(items[b].name,'he')})}
+function group(ids){var g=CATS.map(function(){return []});ids.forEach(function(id){var c=CATS.indexOf(items[id].cat);g[c<0?CATS.length-1:c].push(id)});return g}
+function rows(ids,fn){var h='';group(ids).forEach(function(g,i){if(!g.length)return;h+='<h4>'+CATS[i]+'</h4>';g.forEach(function(id){h+=fn(id,items[id])})});return h}
+function catSel(){return '<select id="cat" aria-label="קטגוריה">'+CATS.map(function(c){return '<option>'+c+'</option>'}).join('')+'</select>'}
+function render(){
+  var need=sorted(function(i){return i.need}),h='';
+  $('cnt').textContent=need.length?'('+need.length+')':'';
+  $('t0').className=tab==0?'on':'';$('t1').className=tab==1?'on':'';
+  var lastCat=$('cat')?$('cat').value:CATS[0];
+  h+='<div class="add"><input id="inp" placeholder="'+(tab?'הוספה לרשימת הקניות':'הוספת מוצר לבית')+'" enterkeyhint="done">'+catSel()+'<button class="p" id="addb">הוסף</button></div>';
+  if(tab==0){
+    var l=sorted(function(i){return i.pantry});
+    if(!l.length)h+='<div class="empty">עוד אין מוצרים. הוסיפו חלב, ביצים, לחם...</div>';
+    h+=rows(l,function(id,it){return '<div class="row"><span class="n">'+esc(it.name)+'</span><button class="sm" data-a="cat" data-i="'+id+'">שינוי קטגוריה</button><button class="st '+(it.need?'out':'have')+'" data-a="tog" data-i="'+id+'">'+(it.need?'נגמר':'יש')+'</button><button class="ic" data-a="del" data-i="'+id+'" aria-label="מחיקה">🗑</button></div>'});
+  }else{
+    if(!need.length)h+='<div class="empty">אין מה לקנות 🎉</div>';
+    h+=rows(need,function(id,it){return '<div class="row'+(it.cart?' done':'')+'"><input type="checkbox" data-a="cart" data-i="'+id+'"'+(it.cart?' checked':'')+'><span class="n">'+esc(it.name)+'</span><span class="q"><button class="ic" data-a="dec" data-i="'+id+'">−</button><b>'+(it.qty||1)+'</b><button class="ic" data-a="inc" data-i="'+id+'">+</button></span><button class="ic" data-a="ren" data-i="'+id+'" aria-label="עריכה">✎</button><button class="ic" data-a="rm" data-i="'+id+'" aria-label="הסרה">✕</button></div>'});
+    if(need.length)h+='<button class="p fin" data-a="fin">סיימתי קנייה</button>';
+  }
+  var m=$('main'),keep=document.activeElement&&document.activeElement.id=='inp'?$('inp').value:'';
+  m.innerHTML=h;$('cat').value=lastCat;
+  if(keep){$('inp').value=keep;$('inp').focus()}
+}
+function openSheet(html){$('sb').innerHTML=html;$('sheet').className='show'}
+function closeSheet(){$('sheet').className='';sheetMode=null}
+$('sheet').onclick=function(e){if(e.target==$('sheet'))closeSheet()};
+function finishSheet(){
+  var h='<h3>מה קניתם?</h3>';
+  sorted(function(i){return i.need}).forEach(function(id){h+='<label class="row"><input type="checkbox" class="bk" data-i="'+id+'"'+(items[id].cart?' checked':'')+'><span class="n">'+esc(items[id].name)+'</span></label>'});
+  h+='<button class="p fin" id="ok">אישור</button><button class="fin" id="cx">ביטול</button><p style="color:var(--mut);font-size:14px">מה שלא יסומן יישאר ברשימה לפעם הבאה.</p>';
+  openSheet(h);$('cx').onclick=closeSheet;
+  $('ok').onclick=function(){
+    var bs=document.querySelectorAll('.bk'),n=0;snap();
+    for(var i=0;i<bs.length;i++){if(!bs[i].checked)continue;var id=bs[i].getAttribute('data-i');n++;
+      if(items[id].pantry)items[id]=Object.assign({},items[id],{need:false,cart:false,qty:1});else delete items[id]}
+    persist();closeSheet();render();toast(n?'עודכן: '+n+' מוצרים':'לא סומנו מוצרים',n>0);
+  };
+}
+function exportData(){
+  var text=JSON.stringify({app:'grocery',v:2,items:items},null,1),name='מצרכים-גיבוי-'+new Date().toISOString().slice(0,10)+'.json';
+  var f;try{f=new File([text],name,{type:'application/json'})}catch(e){}
+  if(f&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(function(){});return}
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();a.remove();
+}
+function menu(){
+  openSheet('<h3>גיבוי והגדרות</h3><button class="fin" id="ex">ייצוא גיבוי לקובץ</button><button class="fin" id="im">ייבוא גיבוי מקובץ</button><p style="color:var(--mut);font-size:14px;line-height:1.5">הרשימות נשמרות רק בדפדפן של הטלפון הזה, ולא נשלחות לשום מקום. הן עלולות להיעלם אם מנקים נתוני אתרים, מוחקים את האפליקציה או כשהנפח במכשיר מלא. כדאי לייצא גיבוי מדי פעם.</p><button class="fin" id="cx">סגירה</button>');
+  $('cx').onclick=closeSheet;$('ex').onclick=exportData;$('im').onclick=function(){$('file').click()};
+}
+$('file').onchange=function(e){
+  var f=e.target.files[0];e.target.value='';if(!f)return;
+  var r=new FileReader();r.onload=function(){
+    try{var d=JSON.parse(r.result);if(!d||d.app!=='grocery'||!d.items||typeof d.items!=='object')throw 0;
+      if(!confirm('לייבא '+Object.keys(d.items).length+' מוצרים? זה יחליף את הרשימות הנוכחיות.'))return;
+      snap();items=d.items;persist();closeSheet();render();toast('הגיבוי יובא',true)}
+    catch(x){toast('הקובץ לא תקין')}
+  };r.readAsText(f);
+};
+$('menu').onclick=menu;
+$('t0').onclick=function(){tab=0;render()};
+$('t1').onclick=function(){tab=1;render()};
+$('main').addEventListener('click',function(e){
+  var b=e.target.closest('[data-a],#addb');if(!b)return;
+  if(b.id=='addb'){var v=$('inp').value;$('inp').value='';addItem(v,$('cat').value,tab==0);return}
+  var a=b.getAttribute('data-a'),id=b.getAttribute('data-i');
+  if(a=='fin')return finishSheet();
+  var it=items[id];if(!it)return;
+  if(a=='tog')save(id,{need:!it.need,cart:false});
+  else if(a=='del'){snap();delete items[id];persist();render();toast('"'+it.name+'" נמחק',true)}
+  else if(a=='inc')save(id,{qty:(it.qty||1)+1});
+  else if(a=='dec')save(id,{qty:Math.max(1,(it.qty||1)-1)});
+  else if(a=='cat'){var i=CATS.indexOf(it.cat);save(id,{cat:CATS[(i+1)%CATS.length]});toast('קטגוריה: '+items[id].cat)}
+  else if(a=='ren'){
+    var v=prompt('שם המוצר',it.name);if(v===null)return;v=norm(v);if(!v)return;
+    var nid=mkid(v);if(nid===id){save(id,{name:v});return}
+    if(items[nid]){toast('מוצר בשם הזה כבר קיים');return}
+    items[nid]=Object.assign({},it,{name:v});delete items[id];persist();render();
+  }
+  else if(a=='rm'){snap();if(it.pantry)items[id]=Object.assign({},it,{need:false,cart:false});else delete items[id];persist();render();toast('"'+it.name+'" הוסר מהרשימה',true)}
+});
+$('main').addEventListener('change',function(e){var b=e.target;if(b.getAttribute('data-a')=='cart')save(b.getAttribute('data-i'),{cart:b.checked})});
+$('main').addEventListener('keydown',function(e){if(e.key=='Enter'&&e.target.id=='inp'){var v=e.target.value;e.target.value='';addItem(v,$('cat').value,tab==0)}});
+items=load();render();
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(function(){});
+if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(function(){});
+})();
+</script>
+</body>
+</html>
